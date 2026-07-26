@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Triple Threat — Player Stat Charts</title>
+<style>
+  :root{
+    --bg:#05070c;
+    --panel:#131c2e;
+    --panel2:#0f1728;
+    --line:#223049;
+    --text:#eef2f7;
+    --muted:#7e93ac;
+    --green:#22c55e;
+    --red:#ef4444;
+    --accent:#3b82f6;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:'Segoe UI',Arial,sans-serif;min-height:100vh;}
+  header{padding:20px 24px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--bg);z-index:10;}
+  header h1{margin:0 0 14px;font-size:18px;}
+  .searchwrap{position:relative;max-width:480px;}
+  #search{width:100%;padding:12px 14px;border-radius:10px;border:1px solid var(--line);background:var(--panel);color:var(--text);font-size:14px;outline:none;}
+  #search:focus{border-color:var(--accent);}
+  .backbtn{display:none;background:var(--panel);border:1px solid var(--line);color:var(--text);padding:8px 14px;border-radius:8px;cursor:pointer;font-size:13px;margin-bottom:14px;}
+  .backbtn.show{display:inline-block;}
+
+  main{max-width:760px;margin:0 auto;padding:20px 24px;}
+
+  #directory{display:flex;flex-direction:column;gap:6px;}
+  .playerrow{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;background:var(--panel);border:1px solid var(--line);border-radius:10px;cursor:pointer;transition:border-color .15s;}
+  .playerrow:hover{border-color:var(--accent);}
+  .playerrow .name{font-size:14px;font-weight:600;}
+  .playerrow .meta{font-size:11px;color:var(--muted);}
+  .emptystate{text-align:center;color:var(--muted);padding:60px 20px;font-size:13px;}
+
+  #detail{display:none;}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px;margin-bottom:16px;}
+  h2{margin:0 0 4px;font-size:19px;}
+  .sub{color:var(--muted);font-size:12px;margin-bottom:16px;}
+
+  .stattabs{display:flex;gap:6px;margin-bottom:18px;flex-wrap:wrap;}
+  .stattab{padding:8px 14px;border-radius:8px;background:var(--panel2);border:1px solid var(--line);color:var(--muted);font-size:12px;font-weight:600;cursor:pointer;}
+  .stattab.active{background:var(--accent);color:#fff;border-color:var(--accent);}
+
+  .badges{display:flex;gap:8px;margin-bottom:16px;}
+  .badge{flex:1;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:10px 6px;text-align:center;}
+  .badge .label{font-size:10px;color:var(--muted);}
+  .badge .hr{font-size:16px;font-weight:700;color:var(--green);}
+  .badge .avg{font-size:11px;color:var(--muted);}
+
+  .linerow{display:flex;align-items:center;gap:10px;margin-bottom:16px;}
+  .linerow label{font-size:12px;color:var(--muted);}
+  .linerow input{width:70px;padding:6px 8px;border-radius:6px;border:1px solid var(--line);background:var(--panel2);color:var(--text);font-size:13px;}
+
+  .chartwrap{position:relative;}
+  .chart1{display:flex;align-items:flex-end;gap:5px;height:190px;border-bottom:1px dashed var(--line);position:relative;margin-bottom:8px;}
+  .bar1{flex:1;border-radius:4px 4px 0 0;position:relative;cursor:pointer;display:flex;align-items:flex-start;justify-content:center;padding-top:4px;font-size:10px;font-weight:700;color:#04150a;min-height:2px;transition:opacity .1s;}
+  .bar1:hover{opacity:.8;}
+  .bar1.green{background:var(--green);}
+  .bar1.red{background:var(--red);color:#2a0505;}
+  .avgline{position:absolute;left:0;right:0;border-top:1px dashed var(--muted);}
+  .xlabels{display:flex;gap:5px;}
+  .xlabels div{flex:1;text-align:center;font-size:9px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+
+  .tooltip{display:none;position:absolute;background:var(--panel2);border:1px solid var(--accent);border-radius:8px;padding:10px 12px;font-size:11px;z-index:20;pointer-events:none;min-width:150px;box-shadow:0 4px 16px rgba(0,0,0,.4);}
+  .tooltip .t1{font-weight:700;margin-bottom:4px;}
+  .tooltip .t2{color:var(--muted);}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Triple Threat — Player Stat Charts</h1>
+  <button class="backbtn" id="backBtn" onclick="showDirectory()">&larr; Back to search</button>
+  <div class="searchwrap" id="searchWrap">
+    <input type="text" id="search" placeholder="Search player name..." oninput="filterDirectory()">
+  </div>
+</header>
+
+<main>
+  <div id="directory"></div>
+
+  <div id="detail">
+    <div class="card">
+      <h2 id="playerName"></h2>
+      <div class="sub" id="playerSub"></div>
+
+      <div class="stattabs" id="statTabs"></div>
+
+      <div class="linerow">
+        <label>Line:</label>
+        <input type="number" id="lineInput" step="0.5" value="0" oninput="renderChart()">
+        <span class="sub" id="lineHint" style="margin:0"></span>
+      </div>
+
+      <div class="badges" id="badges"></div>
+
+      <div class="chartwrap">
+        <div class="chart1" id="chart1"></div>
+        <div class="xlabels" id="xlabels1"></div>
+        <div class="tooltip" id="tooltip"></div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTUgynZkMlV0EmiCfbuxUoIw6C9_dHoYByxdKwWFnBoUeHUnompM-_FJ4sD_fBfVlX3PcsjhAIQVno4/pub?gid=512698170&single=true&output=csv';
+
+let DATA = {};
+let NAME_DISPLAY = {}; // lowercase key -> canonical display name (first one seen)
+
+function safeInt(v){
+  const n = parseInt(String(v).trim(), 10);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function parseCSVLine(line){
+  // basic CSV split handling quoted commas
+  const out = [];
+  let cur = '', inQuotes = false;
+  for(let i=0;i<line.length;i++){
+    const c = line[i];
+    if(c === '"'){ inQuotes = !inQuotes; continue; }
+    if(c === ',' && !inQuotes){ out.push(cur); cur=''; continue; }
+    cur += c;
+  }
+  out.push(cur);
+  return out;
+}
+
+async function loadData(){
+  try{
+    const res = await fetch(CSV_URL);
+    const text = await res.text();
+    const lines = text.split('\n').filter(l => l.trim().length > 0);
+    for(let i=1;i<lines.length;i++){
+      const cols = parseCSVLine(lines[i]);
+      const [player, date, opp, surface, tg, gw, aces, bp, df] = cols;
+      if(!player) continue;
+      const key = player.trim().toLowerCase();
+      if(!NAME_DISPLAY[key]) NAME_DISPLAY[key] = player.trim();
+      if(!DATA[key]) DATA[key] = [];
+      DATA[key].push({
+        date: date || '',
+        opp: (opp||'').trim(),
+        surface: (surface||'').trim(),
+        tg: safeInt(tg),
+        gw: safeInt(gw),
+        aces: safeInt(aces),
+        bp: safeInt(bp),
+        df: safeInt(df)
+      });
+    }
+  } catch(e){
+    document.getElementById('directory').innerHTML =
+      '<div class="emptystate">Could not load live data. Check your connection or the published sheet link.</div>';
+    return;
+  }
+  renderDirectory('');
+}
+
+const STATS = [
+  {key:'tg', label:'Total Games', defaultLine:21.5},
+  {key:'gw', label:'Games Won', defaultLine:11.5},
+  {key:'aces', label:'Aces', defaultLine:3.5},
+  {key:'bp', label:'Break Points Won', defaultLine:3.5},
+  {key:'df', label:'Double Faults', defaultLine:2.5}
+];
+
+let currentPlayer = null;
+let currentStat = 'tg';
+
+function renderDirectory(filter){
+  const wrap = document.getElementById('directory');
+  const names = Object.keys(DATA).sort((a,b)=>NAME_DISPLAY[a].localeCompare(NAME_DISPLAY[b]));
+  const matched = filter ? names.filter(n=>NAME_DISPLAY[n].toLowerCase().includes(filter.toLowerCase())) : names;
+  if(!filter){
+    wrap.innerHTML = '<div class="emptystate">Search a player above, or pick one from the full list below.</div>' +
+      matched.map(n=>rowHtml(n)).join('');
+    return;
+  }
+  if(matched.length===0){
+    wrap.innerHTML = '<div class="emptystate">No players match "'+filter+'"</div>';
+    return;
+  }
+  wrap.innerHTML = matched.map(n=>rowHtml(n)).join('');
+}
+
+function rowHtml(key){
+  const matches = DATA[key];
+  const display = NAME_DISPLAY[key];
+  return `<div class="playerrow" onclick="openPlayer('${key.replace(/'/g,"\\'")}')">
+    <div><div class="name">${display}</div><div class="meta">${matches.length} matches on file</div></div>
+    <div class="meta">${matches[0] ? 'Last: '+matches[0].date+' vs '+matches[0].opp : ''}</div>
+  </div>`;
+}
+
+function filterDirectory(){
+  renderDirectory(document.getElementById('search').value.trim());
+}
+
+function openPlayer(name){
+  currentPlayer = name;
+  document.getElementById('directory').style.display = 'none';
+  document.getElementById('searchWrap').style.display = 'none';
+  document.getElementById('backBtn').classList.add('show');
+  document.getElementById('detail').style.display = 'block';
+  document.getElementById('playerName').textContent = NAME_DISPLAY[name];
+  document.getElementById('playerSub').textContent = DATA[name].length + ' matches on file, most recent first';
+
+  const tabs = document.getElementById('statTabs');
+  tabs.innerHTML = STATS.map(s=>`<div class="stattab ${s.key===currentStat?'active':''}" onclick="switchStat('${s.key}')">${s.label}</div>`).join('');
+
+  document.getElementById('lineInput').value = STATS.find(s=>s.key===currentStat).defaultLine;
+  renderChart();
+}
+
+function showDirectory(){
+  document.getElementById('directory').style.display = 'flex';
+  document.getElementById('searchWrap').style.display = 'block';
+  document.getElementById('backBtn').classList.remove('show');
+  document.getElementById('detail').style.display = 'none';
+  document.getElementById('search').value = '';
+  renderDirectory('');
+}
+
+function switchStat(key){
+  currentStat = key;
+  document.querySelectorAll('.stattab').forEach(t=>t.classList.remove('active'));
+  event.target.classList.add('active');
+  const statDef = STATS.find(s=>s.key===key);
+  document.getElementById('lineInput').value = statDef.defaultLine;
+  renderChart();
+}
+
+function hitRate(matches, key, line){
+  const n = matches.length;
+  if(n===0) return {hr:0, avg:0};
+  const hits = matches.filter(m=>m[key] > line).length;
+  const avg = matches.reduce((s,m)=>s+m[key],0)/n;
+  return {hr: Math.round((hits/n)*100), avg: avg.toFixed(1)};
+}
+
+function renderChart(){
+  const matches = DATA[currentPlayer].slice().reverse(); // oldest to newest for left-to-right bars
+  const line = parseFloat(document.getElementById('lineInput').value) || 0;
+  const statDef = STATS.find(s=>s.key===currentStat);
+  document.getElementById('lineHint').textContent = 'vs ' + statDef.label.toLowerCase();
+
+  const recent = DATA[currentPlayer]; // most recent first
+  const l5 = hitRate(recent.slice(0,5), currentStat, line);
+  const l10 = hitRate(recent.slice(0,10), currentStat, line);
+  const l15 = hitRate(recent.slice(0,15), currentStat, line);
+
+  document.getElementById('badges').innerHTML = `
+    <div class="badge"><div class="label">L5</div><div class="hr">${l5.hr}%</div><div class="avg">avg ${l5.avg}</div></div>
+    <div class="badge"><div class="label">L10</div><div class="hr">${l10.hr}%</div><div class="avg">avg ${l10.avg}</div></div>
+    <div class="badge"><div class="label">L15</div><div class="hr">${l15.hr}%</div><div class="avg">avg ${l15.avg}</div></div>
+  `;
+
+  const chart = document.getElementById('chart1');
+  chart.innerHTML = '';
+  const vals = matches.map(m=>m[currentStat]);
+  const maxV = Math.max(...vals, line, 1);
+
+  matches.forEach(m=>{
+    const v = m[currentStat];
+    const h = (v/maxV)*100;
+    const div = document.createElement('div');
+    div.className = 'bar1 ' + (v > line ? 'green' : 'red');
+    div.style.height = Math.max(h,3) + '%';
+    div.textContent = v;
+    div.onmouseenter = (e)=>showTooltip(e, m);
+    div.onmouseleave = hideTooltip;
+    chart.appendChild(div);
+  });
+
+  if(line <= maxV){
+    const avgLine = document.createElement('div');
+    avgLine.className = 'avgline';
+    avgLine.style.bottom = ((line/maxV)*100) + '%';
+    chart.appendChild(avgLine);
+  }
+
+  document.getElementById('xlabels1').innerHTML = matches.map(m=>`<div>${m.date}</div>`).join('');
+}
+
+function showTooltip(e, m){
+  const tip = document.getElementById('tooltip');
+  tip.innerHTML = `<div class="t1">${m.date} vs ${m.opp}</div>
+    <div class="t2">Surface: ${m.surface}</div>
+    <div class="t2">Total Games: ${m.tg} · Games Won: ${m.gw}</div>
+    <div class="t2">Aces: ${m.aces} · DF: ${m.df} · BP Won: ${m.bp}</div>`;
+  tip.style.display = 'block';
+  const rect = e.target.getBoundingClientRect();
+  const wrapRect = e.target.closest('.chartwrap').getBoundingClientRect();
+  tip.style.left = (rect.left - wrapRect.left - 20) + 'px';
+  tip.style.top = (rect.top - wrapRect.top - 90) + 'px';
+}
+function hideTooltip(){
+  document.getElementById('tooltip').style.display = 'none';
+}
+
+loadData();
+</script>
+</body>
+</html>
