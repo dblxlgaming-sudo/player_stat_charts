@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Triple Threat — Player Stat Charts</title>
 <style>
   :root{
@@ -100,6 +100,7 @@
         <input type="number" id="lineInput" step="0.5" value="0" oninput="renderChart()">
         <span class="sub" id="lineHint" style="margin:0"></span>
       </div>
+      <div class="stattabs" id="windowTabs" style="margin-bottom:16px;"></div>
 
       <div class="badges" id="badges"></div>
 
@@ -124,7 +125,6 @@ function safeInt(v){
 }
 
 function parseCSVLine(line){
-  // basic CSV split handling quoted commas
   const out = [];
   let cur = '', inQuotes = false;
   for(let i=0;i<line.length;i++){
@@ -176,6 +176,8 @@ const STATS = [
   {key:'df', label:'Double Faults', defaultLine:2.5}
 ];
 
+const WINDOWS = [5, 10, 15];
+let currentWindow = 10;
 let currentPlayer = null;
 let currentStat = 'tg';
 
@@ -210,6 +212,7 @@ function filterDirectory(){
 
 function openPlayer(name){
   currentPlayer = name;
+  currentWindow = 10;
   document.getElementById('directory').style.display = 'none';
   document.getElementById('searchWrap').style.display = 'none';
   document.getElementById('backBtn').classList.add('show');
@@ -235,10 +238,15 @@ function showDirectory(){
 
 function switchStat(key){
   currentStat = key;
-  document.querySelectorAll('.stattab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('#statTabs .stattab').forEach(t=>t.classList.remove('active'));
   event.target.classList.add('active');
   const statDef = STATS.find(s=>s.key===key);
   document.getElementById('lineInput').value = statDef.defaultLine;
+  renderChart();
+}
+
+function switchWindow(w){
+  currentWindow = w;
   renderChart();
 }
 
@@ -251,15 +259,19 @@ function hitRate(matches, key, line){
 }
 
 function renderChart(){
-  const matches = DATA[currentPlayer].slice().reverse(); // oldest to newest for left-to-right bars
+  document.getElementById('windowTabs').innerHTML = WINDOWS.map(w =>
+    `<div class="stattab ${w===currentWindow?'active':''}" onclick="switchWindow(${w})">Last ${w}</div>`
+  ).join('');
+
+  const recentFull = DATA[currentPlayer]; // most recent first
+  const matches = recentFull.slice(0, currentWindow).slice().reverse(); // oldest to newest, windowed
   const line = parseFloat(document.getElementById('lineInput').value) || 0;
   const statDef = STATS.find(s=>s.key===currentStat);
   document.getElementById('lineHint').textContent = 'vs ' + statDef.label.toLowerCase();
 
-  const recent = DATA[currentPlayer]; // most recent first
-  const l5 = hitRate(recent.slice(0,5), currentStat, line);
-  const l10 = hitRate(recent.slice(0,10), currentStat, line);
-  const l15 = hitRate(recent.slice(0,15), currentStat, line);
+  const l5 = hitRate(recentFull.slice(0,5), currentStat, line);
+  const l10 = hitRate(recentFull.slice(0,10), currentStat, line);
+  const l15 = hitRate(recentFull.slice(0,15), currentStat, line);
 
   document.getElementById('badges').innerHTML = `
     <div class="badge"><div class="label">L5</div><div class="hr">${l5.hr}%</div><div class="avg">avg ${l5.avg}</div></div>
