@@ -44,6 +44,35 @@
   .stattab{padding:8px 14px;border-radius:8px;background:var(--panel2);border:1px solid var(--line);color:var(--muted);font-size:12px;font-weight:600;cursor:pointer;}
   .stattab.active{background:var(--accent);color:#fff;border-color:var(--accent);}
 
+  .surface-label{
+    font-size:10px;
+    color:var(--muted);
+    text-transform:uppercase;
+    letter-spacing:.8px;
+    margin:0 0 7px;
+  }
+  .surfacetabs{display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap;}
+  .surfacetab{
+    padding:8px 14px;
+    border-radius:8px;
+    background:var(--panel2);
+    border:1px solid var(--line);
+    color:var(--muted);
+    font-size:12px;
+    font-weight:600;
+    cursor:pointer;
+  }
+  .surfacetab.active{
+    background:var(--accent);
+    color:#fff;
+    border-color:var(--accent);
+  }
+  .surface-summary{
+    font-size:11px;
+    color:var(--muted);
+    margin:-6px 0 14px;
+  }
+
   .badges{display:flex;gap:8px;margin-bottom:16px;}
   .badge{flex:1;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:10px 6px;text-align:center;}
   .badge .label{font-size:10px;color:var(--muted);}
@@ -94,6 +123,10 @@
       <div class="sub" id="playerSub"></div>
 
       <div class="stattabs" id="statTabs"></div>
+
+      <div class="surface-label">Surface</div>
+      <div class="surfacetabs" id="surfaceTabs"></div>
+      <div class="surface-summary" id="surfaceSummary"></div>
 
       <div class="linerow">
         <label>Line:</label>
@@ -180,6 +213,9 @@ const WINDOWS = [5, 10, 15];
 let currentWindow = 10;
 let currentPlayer = null;
 let currentStat = 'tg';
+let currentSurface = 'All';
+
+const SURFACES = ['All', 'Hard', 'Clay', 'Grass'];
 
 function renderDirectory(filter){
   const wrap = document.getElementById('directory');
@@ -213,6 +249,7 @@ function filterDirectory(){
 function openPlayer(name){
   currentPlayer = name;
   currentWindow = 10;
+  currentSurface = 'All';
   document.getElementById('directory').style.display = 'none';
   document.getElementById('searchWrap').style.display = 'none';
   document.getElementById('backBtn').classList.add('show');
@@ -250,6 +287,11 @@ function switchWindow(w){
   renderChart();
 }
 
+function switchSurface(surface){
+  currentSurface = surface;
+  renderChart();
+}
+
 function hitRate(matches, key, line){
   const n = matches.length;
   if(n===0) return {hr:0, avg:0};
@@ -263,8 +305,20 @@ function renderChart(){
     `<div class="stattab ${w===currentWindow?'active':''}" onclick="switchWindow(${w})">Last ${w}</div>`
   ).join('');
 
-  const recentFull = DATA[currentPlayer]; // most recent first
-  const matches = recentFull.slice(0, currentWindow).slice().reverse(); // oldest to newest, windowed
+  document.getElementById('surfaceTabs').innerHTML = SURFACES.map(surface =>
+    `<div class="surfacetab ${surface===currentSurface?'active':''}" onclick="switchSurface('${surface}')">${surface}</div>`
+  ).join('');
+
+  const playerMatches = DATA[currentPlayer]; // most recent first
+  const recentFull = currentSurface === 'All'
+    ? playerMatches
+    : playerMatches.filter(m => m.surface.toLowerCase() === currentSurface.toLowerCase());
+
+  const shownSurface = currentSurface === 'All' ? 'all surfaces' : currentSurface + ' only';
+  document.getElementById('surfaceSummary').textContent =
+    recentFull.length + ' matches available for ' + shownSurface;
+
+  const matches = recentFull.slice(0, currentWindow).slice().reverse(); // oldest to newest, filtered first
   const line = parseFloat(document.getElementById('lineInput').value) || 0;
   const statDef = STATS.find(s=>s.key===currentStat);
   document.getElementById('lineHint').textContent = 'vs ' + statDef.label.toLowerCase();
@@ -281,6 +335,14 @@ function renderChart(){
 
   const chart = document.getElementById('chart1');
   chart.innerHTML = '';
+  document.getElementById('xlabels1').innerHTML = '';
+
+  if(matches.length === 0){
+    chart.innerHTML = '<div class="emptystate" style="width:100%;padding:65px 10px;">No ' +
+      currentSurface + ' matches available for this player.</div>';
+    return;
+  }
+
   const vals = matches.map(m=>m[currentStat]);
   const maxV = Math.max(...vals, line, 1);
 
