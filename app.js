@@ -187,6 +187,11 @@ function hitRate(matches,key,line){
     usable:observations.length, decisions, hits, pushes};
 }
 
+function selectedObservations(matches,key,surface,windowSize){
+  const filtered=surface==='All'?matches:matches.filter(match=>match.surface.toLowerCase()===surface.toLowerCase());
+  return usable(filtered,key).slice(0,windowSize);
+}
+
 function badge(label,result){
   const rate=result.hr===null?'—':result.hr+'%';
   const detail=result.usable?`${result.hits}/${result.decisions} · n=${result.usable}${result.pushes?' · '+result.pushes+' push':''}`:'unavailable';
@@ -210,7 +215,9 @@ function renderChart(){
   document.getElementById('lineHint').textContent='Over '+line+' '+stat.label.toLowerCase();
   document.getElementById('badges').innerHTML=badge('L5',hitRate(available.slice(0,5),currentStat,line))+badge('L10',hitRate(available.slice(0,10),currentStat,line))+badge('L15',hitRate(available.slice(0,15),currentStat,line));
 
-  const matches=available.slice(0,currentWindow).slice().reverse();
+  const recentMatches=selectedObservations(DATA[currentPlayer],currentStat,currentSurface,currentWindow);
+  renderRecentMatches(recentMatches,stat,line);
+  const matches=recentMatches.slice().reverse();
   const chart=document.getElementById('chart1'), labels=document.getElementById('xlabels1');
   chart.innerHTML=''; labels.innerHTML='';
   if(!matches.length){
@@ -223,10 +230,31 @@ function renderChart(){
     bar.className='bar1 '+(grade==='hit'?'green':'red');
     if(grade==='push') bar.style.background='var(--muted)';
     bar.style.height=Math.max(value/maxValue*100,3)+'%'; bar.textContent=value;
-    bar.onmouseenter=event=>showTooltip(event,match); bar.onmouseleave=hideTooltip; chart.appendChild(bar);
+    bar.onmouseenter=event=>showTooltip(event,match); bar.onmouseleave=hideTooltip; bar.onclick=event=>showTooltip(event,match); chart.appendChild(bar);
   });
   if(line<=maxValue){ const marker=document.createElement('div'); marker.className='avgline'; marker.style.bottom=(line/maxValue*100)+'%'; chart.appendChild(marker); }
   labels.innerHTML=matches.map(m=>`<div>${escapeHtml(m.date)}</div>`).join('');
+}
+
+function fullDisplayDate(match){
+  if(!match.dateValue) return match.dateRaw || match.date || '—';
+  return match.dateValue.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',timeZone:'UTC'});
+}
+function renderRecentMatches(matches,stat,line){
+  const wrap=document.getElementById('recentMatches');
+  document.getElementById('recentContext').textContent=`${stat.label} · ${currentSurface} · Over ${line} · L${currentWindow}`;
+  if(!matches.length){
+    wrap.innerHTML=`<div class="emptystate">No usable ${escapeHtml(stat.label)} observations for this surface.</div>`;
+    return;
+  }
+  const rows=matches.map(match=>{
+    const actual=match[currentStat], grade=gradeActual(actual,line);
+    const result=matchResultText(match) || '—';
+    const resultClass=match.result==='W'?'result-win':match.result==='L'?'result-loss':'';
+    const comparison=grade==='hit'?'Over hit':grade==='miss'?'Under':'Push';
+    return `<tr><td>${escapeHtml(fullDisplayDate(match))}</td><td>${escapeHtml(match.tournament||'—')}</td><td>${escapeHtml(match.surface||'—')}</td><td>${escapeHtml(match.opp||'—')}</td><td class="${resultClass}">${escapeHtml(result)}</td><td><strong>${escapeHtml(actual)}</strong></td><td><span class="grade-pill grade-${grade}">${comparison}</span></td></tr>`;
+  }).join('');
+  wrap.innerHTML=`<table class="recent-table"><thead><tr><th>Date</th><th>Tournament</th><th>Surface</th><th>Opponent</th><th>Result</th><th>${escapeHtml(stat.label)}</th><th>vs ${escapeHtml(line)}</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
 function matchResultText(match){
@@ -246,5 +274,5 @@ function showTooltip(event,match){
 }
 function hideTooltip(){ document.getElementById('tooltip').style.display='none'; }
 
-if(typeof module!=='undefined') module.exports={nullableNumber,parseCSV,parseMatchDate,v2Observation,ingestRows,usable,gradeActual,hitRate};
+if(typeof module!=='undefined') module.exports={nullableNumber,parseCSV,parseMatchDate,v2Observation,ingestRows,usable,gradeActual,hitRate,selectedObservations};
 if(typeof document!=='undefined') loadData();
