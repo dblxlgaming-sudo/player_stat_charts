@@ -89,6 +89,7 @@
   .bar1:hover{opacity:.8;}
   .bar1.green{background:var(--green);}
   .bar1.red{background:var(--red);color:#2a0505;}
+  .bar1.missing{background:#64748b;color:#e2e8f0;}
   .avgline{position:absolute;left:0;right:0;border-top:1px dashed var(--muted);}
   .xlabels{display:flex;gap:5px;}
   .xlabels div{flex:1;text-align:center;font-size:9px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
@@ -153,8 +154,29 @@ let DATA = {};
 let NAME_DISPLAY = {}; // lowercase key -> canonical display name (first one seen)
 
 function safeInt(v){
-  const n = parseInt(String(v).trim(), 10);
-  return Number.isFinite(n) ? n : 0;
+  const raw = String(v ?? '').trim();
+  if(!raw || raw === '-') return null;
+  const n = parseInt(raw, 10);
+  return Number.isFinite(n) ? n : null;
+}
+
+function parseMatchDate(value){
+  const raw = String(value || '').trim();
+  if(!raw) return 0;
+  // Prefer an unambiguous ISO-like date, then fall back to the browser parser.
+  const iso = raw.match(/^(\d{4})[-\/]?(\d{2})[-\/]?(\d{2})/);
+  if(iso) return Date.UTC(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]));
+  const parsed = Date.parse(raw);
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+function isCurrentYearMatch(value){
+  const timestamp = parseMatchDate(value);
+  if(!timestamp) return false;
+  const now = new Date();
+  const start = Date.UTC(now.getUTCFullYear(), 0, 1);
+  const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 23, 59, 59, 999);
+  return timestamp >= start && timestamp <= today;
 }
 
 function parseCSVLine(line){
@@ -175,14 +197,19 @@ async function loadData(){
     const res = await fetch(CSV_URL);
     const text = await res.text();
     const lines = text.split('\n').filter(l => l.trim().length > 0);
+    const seen = new Set();
     for(let i=1;i<lines.length;i++){
       const cols = parseCSVLine(lines[i]);
       const [player, date, opp, surface, tg, gw, aces, bp, df] = cols;
       if(!player) continue;
+      // Research is scoped to the current calendar year through today. This
+      // keeps older historical rows out of the active chart while preserving
+      // the dynamic 5/10/15 window controls.
+      if(!isCurrentYearMatch(date)) continue;
       const key = player.trim().toLowerCase();
       if(!NAME_DISPLAY[key]) NAME_DISPLAY[key] = player.trim();
       if(!DATA[key]) DATA[key] = [];
-      DATA[key].push({
+      const match = {
         date: date || '',
         opp: (opp||'').trim(),
         surface: (surface||'').trim(),
@@ -191,8 +218,24 @@ async function loadData(){
         aces: safeInt(aces),
         bp: safeInt(bp),
         df: safeInt(df)
-      });
+      };
+      // Keep one copy of the same player/match/stat line. This is deliberately
+      // player-perspective aware so both players can retain their own row.
+      const fingerprint = [key, match.date.trim(), match.opp.toLowerCase(),
+        match.surface.toLowerCase(), match.tg, match.gw, match.aces,
+        match.bp, match.df].join('|');
+      if(seen.has(fingerprint)) continue;
+      seen.add(fingerprint);
+      DATA[key].push(match);
     }
+    // The source sheet is append-oriented, so never rely on row order for
+    // recency. Unknown dates are kept at the end rather than treated as new.
+    Object.keys(DATA).forEach(key => {
+      DATA[key].sort((a,b) => {
+        const delta = parseMatchDate(b.date) - parseMatchDate(a.date);
+        return delta || String(b.date).localeCompare(String(a.date));
+      });
+    });
   } catch(e){
     document.getElementById('directory').innerHTML =
       '<div class="emptystate">Could not load live data. Check your connection or the published sheet link.</div>';
@@ -293,10 +336,11 @@ function switchSurface(surface){
 }
 
 function hitRate(matches, key, line){
-  const n = matches.length;
-  if(n===0) return {hr:0, avg:0};
-  const hits = matches.filter(m=>m[key] > line).length;
-  const avg = matches.reduce((s,m)=>s+m[key],0)/n;
+  const valid = matches.filter(m=>Number.isFinite(m[key]));
+  const n = valid.length;
+  if(n===0) return {hr:'N/A', avg:'N/A'};
+  const hits = valid.filter(m=>m[key] > line).length;
+  const avg = valid.reduce((s,m)=>s+m[key],0)/n;
   return {hr: Math.round((hits/n)*100), avg: avg.toFixed(1)};
 }
 
@@ -344,15 +388,17 @@ function renderChart(){
   }
 
   const vals = matches.map(m=>m[currentStat]);
-  const maxV = Math.max(...vals, line, 1);
+  const validVals = vals.filter(Number.isFinite);
+  const maxV = Math.max(...validVals, line, 1);
 
   matches.forEach(m=>{
     const v = m[currentStat];
-    const h = (v/maxV)*100;
+    const hasValue = Number.isFinite(v);
+    const h = hasValue ? (v/maxV)*100 : 0;
     const div = document.createElement('div');
-    div.className = 'bar1 ' + (v > line ? 'green' : 'red');
+    div.className = 'bar1 ' + (!hasValue ? 'missing' : (v > line ? 'green' : 'red'));
     div.style.height = Math.max(h,3) + '%';
-    div.textContent = v;
+    div.textContent = hasValue ? v : 'N/A';
     div.onmouseenter = (e)=>showTooltip(e, m);
     div.onmouseleave = hideTooltip;
     chart.appendChild(div);
