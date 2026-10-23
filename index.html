@@ -228,6 +228,25 @@ async function loadData(){
       seen.add(fingerprint);
       DATA[key].push(match);
     }
+    // Verified manual updates are applied immediately when the published
+    // source sheet has not caught up yet. Detailed fields remain null when
+    // the evidence does not provide them.
+    const verifiedUpdates = [{
+      player:'Ashlyn Krueger', date:'2026-10-22', opp:'Talia Gibson',
+      surface:'Hard', tg:16, gw:12, aces:6, bp:5, df:0
+    }];
+    verifiedUpdates.forEach(match => {
+      const key = match.player.toLowerCase();
+      if(!NAME_DISPLAY[key]) NAME_DISPLAY[key] = match.player;
+      if(!DATA[key]) DATA[key] = [];
+      const fingerprint = [key, match.date, match.opp.toLowerCase(),
+        match.surface.toLowerCase(), match.tg, match.gw, match.aces,
+        match.bp, match.df].join('|');
+      if(!seen.has(fingerprint)) {
+        seen.add(fingerprint);
+        DATA[key].push(match);
+      }
+    });
     // The source sheet is append-oriented, so never rely on row order for
     // recency. Unknown dates are kept at the end rather than treated as new.
     Object.keys(DATA).forEach(key => {
